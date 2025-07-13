@@ -301,6 +301,17 @@ button:disabled {
   animation: pulse 2s infinite;
 }
 
+.drawn-card-display {
+  background: #f0f0f0; /* Lighter background for the display area */
+  border: 2px dashed #ccc; /* Dashed border to indicate it's a display area */
+  cursor: default; /* Not directly clickable */
+}
+
+.drawn-card-display:hover {
+  transform: none; /* No hover effect for display area */
+  box-shadow: none;
+}
+
 /* Status and Turn Indicator */
 .status-area {
   text-align: center;

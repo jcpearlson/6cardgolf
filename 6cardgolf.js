@@ -48,6 +48,8 @@ function startNewGame() {
     gameState.selectedCard = null;
     gameState.drawnCard = null;
     gameState.flippedInitialCards = 0; // Track how many initial cards are flipped by current player
+    gameState.flippedOpponentInitialCards = 0; // Initialize for host to track opponent's flips
+    gameState.flippedHostInitialCards = 0; // Initialize for host to track their own flips
 
     // Send initial game state to opponent
     sendMessage({
@@ -84,6 +86,8 @@ function handleGameStart(data) {
   gameState.selectedCard = null;
   gameState.drawnCard = null;
   gameState.flippedInitialCards = 0;
+  gameState.flippedOpponentInitialCards = 0; // Initialize for client
+  gameState.flippedHostInitialCards = 0; // Initialize for client
 
   updateGameUI();
   if (data.hostStartsFlipping) {
@@ -102,6 +106,7 @@ function handleGameAction(action) {
     case 'cardFlipped':
       if (gameState.opponentHand[action.cardIndex]) {
         gameState.opponentHand[action.cardIndex].faceUp = true;
+        // Ensure the full card object (suit and value) is updated
         gameState.opponentHand[action.cardIndex].card = action.card;
       }
       // Check if it's an initial flip by the opponent
@@ -142,20 +147,21 @@ function handleGameAction(action) {
         gameState.opponentHand[action.cardIndex] = { card: action.newCard, faceUp: true };
       }
       gameState.discardPile = [action.discardedCard];
-      gameState.drawnCard = null;
-      gameState.isMyTurn = true;
+      gameState.drawnCard = null; // Opponent's drawn card is now discarded or replaced
+      gameState.isMyTurn = true; // It becomes your turn after opponent's action
       updateGameStatus('Opponent replaced a card. Your turn!');
       break;
     case 'cardDiscarded':
       gameState.discardPile = [action.discardedCard];
-      gameState.drawnCard = null;
-      gameState.isMyTurn = true;
+      gameState.drawnCard = null; // Opponent's drawn card is now discarded
+      gameState.isMyTurn = true; // It becomes your turn after opponent's action
       updateGameStatus('Opponent discarded the card. Your turn!');
       break;
     case 'roundEnded':
       gameState.roundEnded = true;
-      gameState.opponentHand = action.finalPlayerHand.map(c => ({ card: c, faceUp: true })); // This should be finalPlayerHand from opponent
-      gameState.playerHand = gameState.playerHand.map(h => ({ ...h, faceUp: true }));
+      // Ensure opponentHand is fully revealed using the full card objects from finalPlayerHand
+      gameState.opponentHand = action.finalPlayerHand.map(c => ({ card: c, faceUp: true }));
+      gameState.playerHand.forEach(h => h.faceUp = true); // Ensure own hand is also fully revealed
       calculateAndDisplayScores();
       elements.newGameBtn.style.display = 'inline-block';
       updateGameStatus('Round ended! Scores calculated. Click "New Game" to play again.');
@@ -176,8 +182,7 @@ function handleCardClick(index) {
     sendMessage({ type: "gameAction", data: { type: "cardFlipped", cardIndex: index, card: cardInHand.card, isInitialFlip: true } });
     updateGameUI();
 
-    const flippedCount = gameState.playerHand.filter(c => c.faceUp).length;
-    if (flippedCount === 2) {
+    if (gameState.flippedInitialCards === 2) {
         updateGameStatus("You have flipped two cards. Waiting for opponent to flip their cards.");
         // Inform opponent that current player has finished initial flips
         sendMessage({ type: "gameAction", data: { type: "initialFlipComplete" } });
@@ -188,8 +193,8 @@ function handleCardClick(index) {
                 determineFirstTurn();
             }
         }
-    } else if (flippedCount < 2) {
-      updateGameStatus(`Flip ${2 - flippedCount} more card(s).`);
+    } else if (gameState.flippedInitialCards < 2) {
+      updateGameStatus(`Flip ${2 - gameState.flippedInitialCards} more card(s).`);
     }
     return;
   }
@@ -198,7 +203,7 @@ function handleCardClick(index) {
   if (gameState.drawnCard && gameState.isMyTurn) {
     gameState.selectedCard = index; // Store selected index for replacement
     replaceCard(index);
-  } else if (gameState.isMyTurn) { // Only show this if it's the actual turn, not flipping phase
+  } else if (gameState.isMyTurn && gameState.playerHand.filter(c => c.faceUp).length === 2) { // Only show this if it's the actual turn AND initial flips are done
     updateGameStatus("Draw a card from the Draw Pile or take from Discard Pile first.");
   }
 }
@@ -314,7 +319,7 @@ function endRound() {
     type: "gameAction",
     data: {
       type: "roundEnded",
-      finalPlayerHand: gameState.playerHand.map(h => h.card), // Send my final revealed hand
+      finalPlayerHand: gameState.playerHand.map(h => h.card), // Send my final revealed hand (only the card object)
     }
   });
 

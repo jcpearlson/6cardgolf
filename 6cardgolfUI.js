@@ -22,6 +22,7 @@ const elements = {
   opponentHand: document.getElementById("opponentHand"),
   drawPile: document.getElementById("drawPile"),
   discardPile: document.getElementById("discardPile"),
+  drawnCardDisplay: document.getElementById("drawnCardDisplay"), // New element reference
   playerScore: document.getElementById("playerScore"),
   opponentScore: document.getElementById("opponentScore"),
   chatMessages: document.getElementById("chatMessages"),
@@ -108,11 +109,12 @@ function createCardElement(c, isPlayerHand) {
     isPlayerHand &&
     !gameState.roundEnded;
   const canFlipInitial =
-    gameState.isMyTurn &&
+    gameState.isMyTurn === false && // during initial flip phase, isMyTurn is false
     !gameState.drawnCard &&
     isPlayerHand &&
     !c.faceUp &&
-    !gameState.roundEnded;
+    !gameState.roundEnded &&
+    gameState.flippedInitialCards < 2; // Only allow flipping if less than 2 flipped
   if (canSelectToReplace || canFlipInitial) {
     e.classList.add("selectable");
   } else {
@@ -124,6 +126,19 @@ function createCardElement(c, isPlayerHand) {
 function updatePileDisplay() {
   elements.drawPile.innerHTML = `<div>📚<br>Draw (${gameState.drawPile.length})</div>`;
   elements.discardPile.innerHTML = `<div>🗑️<br>Discard</div>`;
+
+  // Display drawn card
+  elements.drawnCardDisplay.innerHTML = `<div>✨<br>Drawn</div>`;
+  if (gameState.drawnCard) {
+    const drawnCardElement = createCardElement(
+      { card: gameState.drawnCard, faceUp: true },
+      false,
+    );
+    drawnCardElement.classList.remove("selectable");
+    elements.drawnCardDisplay.innerHTML = ""; // Clear initial text
+    elements.drawnCardDisplay.appendChild(drawnCardElement);
+  }
+
   if (gameState.discardPile.length > 0) {
     const topCard = gameState.discardPile[gameState.discardPile.length - 1];
     const cardElement = createCardElement(
@@ -134,6 +149,7 @@ function updatePileDisplay() {
     elements.discardPile.appendChild(cardElement);
   }
 
+  // Add/remove clickable class for draw and discard piles
   if (
     gameState.isMyTurn &&
     !gameState.drawnCard &&
@@ -146,14 +162,34 @@ function updatePileDisplay() {
     } else {
       elements.discardPile.classList.remove("clickable");
     }
+    elements.drawnCardDisplay.classList.remove("clickable"); // Drawn card display is not clickable for taking
+  } else if (
+    gameState.isMyTurn &&
+    gameState.drawnCard &&
+    gameState.gameStarted &&
+    !gameState.roundEnded
+  ) {
+    // If a card is drawn, make discard pile clickable to discard drawn card
+    elements.discardPile.classList.add("clickable");
+    elements.drawPile.classList.remove("clickable");
+    elements.drawnCardDisplay.classList.remove("clickable");
   } else {
     elements.drawPile.classList.remove("clickable");
     elements.discardPile.classList.remove("clickable");
+    elements.drawnCardDisplay.classList.remove("clickable");
   }
 
   // Assign click handlers directly
   elements.drawPile.onclick = takeFromDraw;
-  elements.discardPile.onclick = takeFromDiscard;
+  elements.discardPile.onclick = () => {
+    // If a card is drawn, clicking discard pile discards it
+    if (gameState.drawnCard && gameState.isMyTurn && !gameState.roundEnded) {
+      discardDrawnCard();
+    } else {
+      // Otherwise, it's for taking from discard
+      takeFromDiscard();
+    }
+  };
 }
 
 function updateTurnIndicator() {
